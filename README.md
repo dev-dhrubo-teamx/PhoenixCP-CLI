@@ -57,11 +57,11 @@ Vps web Browser SSH Access TTYD Method
 apt update
 apt install -y ttyd
 ```
-এটা দিলে ttyd চলবে এবং bash খুলবে:
+This run ttyyd :
 ```
 ttyd -p 7681 bash
 ```
-👉 Browser থেকে খুলবে:
+👉 Browser :
 ```
 http://SERVER_IP:7681
 ```
@@ -86,3 +86,30 @@ pass : admin@123
 
 user: root
 pass : root
+
+# Website Match or Redirect  Same Domain
+
+1 
+```
+echo "ServerName localhost" > /etc/apache2/conf-available/servername.conf
+a2enconf servername
+apachectl -k graceful
+```
+2
+```
+cat > /etc/apache2/sites-available/000-catchall.conf <<EOF
+<VirtualHost *:80>
+  ServerName _
+  DocumentRoot /var/www/_invalid
+
+  <Directory /var/www/_invalid>
+    Require all denied
+  </Directory>
+</VirtualHost>
+EOF
+```
+3
+```
+apachectl -k graceful
+```
+
