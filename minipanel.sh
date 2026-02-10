@@ -139,6 +139,19 @@ create_site_ftp_user() {
   echo "$user:$FTP_PASS" | chpasswd
 }
 
+# -----------------------------
+# Apache Production Fix
+# -----------------------------
+
+# Disable default Apache site
+a2dissite 000-default.conf 2>/dev/null || true
+
+# Remove phpinfo test file
+rm -f /var/www/html/index.php
+
+apachectl reload
+
+
 # =====================================================
 create_website() {
   read -p "Domain name: " domain
