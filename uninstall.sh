@@ -20,6 +20,8 @@ rm -rf /etc/nginx/ssl
 apt purge -y nginx* php* mariadb* mysql* cloudflared
 apt autoremove -y
 apt autoclean -y
+apt purge -y nginx nginx-common nginx-core
+apt purge -y php8.1-fpm
 
 # Remove cloudflare repo
 rm -f /etc/apt/sources.list.d/cloudflared.list
