@@ -71,3 +71,9 @@ apt update
 apt install -y python3-pip
 pip3 install gdown
 ```
+# If Come Default Apache Page 
+```
+a2dissite 000-default.conf
+a2dissite default-ssl.conf
+apachectl -k graceful
+```
