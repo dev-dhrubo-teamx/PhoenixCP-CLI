@@ -81,10 +81,35 @@ install_dependencies() {
   echo yes > /etc/pure-ftpd/conf/UnixAuthentication
   echo yes > /etc/pure-ftpd/conf/ChrootEveryone
 
+  # -----------------------------
+  # phpMyAdmin Apache FIX (AUTO)
+  # -----------------------------
+  cat > /etc/apache2/conf-available/phpmyadmin.conf <<EOF
+Alias /phpmyadmin /usr/share/phpmyadmin
+
+<Directory /usr/share/phpmyadmin>
+    Options SymLinksIfOwnerMatch
+    DirectoryIndex index.php
+    AllowOverride All
+    Require all granted
+</Directory>
+
+<Directory /usr/share/phpmyadmin/setup>
+    Require all denied
+</Directory>
+
+<FilesMatch "\.php$">
+    SetHandler "proxy:unix:$PHP_SOCK|fcgi://localhost/"
+</FilesMatch>
+EOF
+
+  a2enconf phpmyadmin
+
   mkdir -p /run/php /var/www/html
   echo "<?php phpinfo(); ?>" > /var/www/html/index.php
 
   start_all_services
+  apachectl reload
 
   echo "✅ Apache stack READY"
   echo "👉 phpMyAdmin: http://localhost/phpmyadmin"
