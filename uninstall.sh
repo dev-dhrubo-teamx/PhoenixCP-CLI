@@ -9,11 +9,7 @@ set -e
 
 echo "🔥 PhoenixCP & Web Stack FULL REMOVAL"
 echo "⚠️ This will WIPE EVERYTHING (Apache, Nginx, PHP, MySQL, FTP, Cloudflare)"
-read -p "Type YES to continue: " CONFIRM
 
-if [ "$CONFIRM" != "YES" ]; then
-  echo "❌ Aborted"
-  exit 1
 fi
 
 echo "🛑 Stopping running services..."
