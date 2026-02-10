@@ -9,6 +9,7 @@ WWW_ROOT="/var/www"
 PHP_VER="8.1"
 PHP_SOCK="/run/php/php${PHP_VER}-fpm.sock"
 FTP_PASS="root"
+MYSQL_ROOT_PASS="root"
 
 pause(){ read -p "Press Enter to continue..."; }
 
@@ -105,14 +106,27 @@ EOF
 
   a2enconf phpmyadmin
 
-  mkdir -p /run/php /var/www/html
+  # -----------------------------
+  # MySQL ROOT AUTO SET (phpMyAdmin ready)
+  # -----------------------------
+  mkdir -p /run/php
+  mysqld_safe --bind-address=127.0.0.1 &>/dev/null &
+  sleep 5
+
+  mysql -uroot <<EOF
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASS}';
+FLUSH PRIVILEGES;
+EOF
+
+  mkdir -p /var/www/html
   echo "<?php phpinfo(); ?>" > /var/www/html/index.php
 
   start_all_services
   apachectl reload
 
-  echo "✅ Apache stack READY"
-  echo "👉 phpMyAdmin: http://localhost/phpmyadmin"
+  echo "✅ Apache + phpMyAdmin READY"
+  echo "👉 phpMyAdmin URL : http://localhost/phpmyadmin"
+  echo "👉 MySQL Login    : root / root"
   pause
 }
 
