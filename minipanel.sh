@@ -1,50 +1,53 @@
 #!/bin/bash
 
 # =====================================================
-# PhoenixCP CLI v1.6 – Apache Only FULL PANEL
+# PhoenixCP CLI v1.8 – FULL PANEL (Apache Only)
 # Author: @dev-dhrubo-teamx
 # =====================================================
 
 WWW_ROOT="/var/www"
 PHP_VER="8.1"
 PHP_SOCK="/run/php/php${PHP_VER}-fpm.sock"
+FTP_PASS="root"
 
 pause(){ read -p "Press Enter to continue..."; }
 
 # =====================================================
 start_all_services() {
   echo "🚀 Starting all services"
-
   mkdir -p /run/php
 
-  apachectl start 2>/dev/null || true
-  php-fpm${PHP_VER} 2>/dev/null || true
+  apachectl start 2>/dev/null
+  php-fpm${PHP_VER} 2>/dev/null
   pure-ftpd &>/dev/null &
   mysqld_safe --bind-address=127.0.0.1 &>/dev/null &
+  pgrep -f cloudflared >/dev/null && cloudflared &>/dev/null &
 
   echo "✅ All services started"
   pause
 }
 
-# =====================================================
 stop_all_services() {
   echo "🛑 Stopping all services"
-
   pkill apache2 php-fpm mysqld pure-ftpd cloudflared 2>/dev/null
-
   echo "✅ All services stopped"
+  pause
+}
+
+# =====================================================
+auto_start_cron() {
+  (crontab -l 2>/dev/null; echo "@reboot /usr/local/bin/phoenixcp start-all") | crontab -
+  echo "✅ Auto-start enabled via cron"
   pause
 }
 
 # =====================================================
 clear_system() {
   echo "🔥 FULL SYSTEM RESET (NUKE MODE)"
-  echo "This will REMOVE apache, php, mysql, phpMyAdmin, FTP, Cloudflare"
   read -p "Type YES to confirm: " c
   [ "$c" != "YES" ] && return
 
-  pkill apache2 php-fpm mysqld pure-ftpd cloudflared 2>/dev/null
-
+  stop_all_services
   apt purge -y apache2* php* mariadb* mysql* phpmyadmin pure-ftpd* cloudflared
   apt autoremove -y
   apt autoclean -y
@@ -52,8 +55,7 @@ clear_system() {
   rm -rf /etc/apache2 /etc/php /etc/mysql /var/www /run/php /usr/share/phpmyadmin
   rm -f /etc/apt/sources.list.d/cloudflared.list
   rm -f /usr/share/keyrings/cloudflare-public-v2.gpg
-
-  crontab -l 2>/dev/null | grep -v cloudflared | crontab -
+  crontab -r 2>/dev/null
 
   echo "✅ SYSTEM COMPLETELY CLEANED"
   pause
@@ -70,33 +72,41 @@ install_dependencies() {
     php${PHP_VER}-curl php${PHP_VER}-mbstring php${PHP_VER}-xml \
     phpmyadmin pure-ftpd
 
-  a2enmod proxy proxy_fcgi rewrite setenvif
+  a2enmod proxy proxy_fcgi rewrite ssl
   a2enconf php${PHP_VER}-fpm
+  a2ensite default-ssl
 
   echo yes > /etc/pure-ftpd/conf/NoAnonymous
   echo no  > /etc/pure-ftpd/conf/PAMAuthentication
   echo yes > /etc/pure-ftpd/conf/UnixAuthentication
+  echo yes > /etc/pure-ftpd/conf/ChrootEveryone
 
-  mkdir -p /run/php
-  php-fpm${PHP_VER}
-  apachectl start
-  pure-ftpd &
-  mysqld_safe --bind-address=127.0.0.1 &
-
-  mkdir -p /var/www/html
+  mkdir -p /run/php /var/www/html
   echo "<?php phpinfo(); ?>" > /var/www/html/index.php
 
-  echo "✅ Apache Web Stack READY"
+  start_all_services
+
+  echo "✅ Apache stack READY"
   echo "👉 phpMyAdmin: http://localhost/phpmyadmin"
   pause
 }
 
 # =====================================================
+create_site_ftp_user() {
+  local user=$1
+  local home=$2
+  userdel -r $user 2>/dev/null
+  useradd -d $home -s /usr/sbin/nologin $user
+  echo "$user:$FTP_PASS" | chpasswd
+}
+
+# =====================================================
 create_website() {
-  read -p "Enter domain name: " domain
+  read -p "Domain name: " domain
   SITE_ROOT="$WWW_ROOT/$domain/public_html"
 
   mkdir -p "$SITE_ROOT"
+  create_site_ftp_user "$domain" "$WWW_ROOT/$domain"
 
   cat > /etc/apache2/sites-available/$domain.conf <<EOF
 <VirtualHost *:80>
@@ -112,27 +122,26 @@ create_website() {
   <FilesMatch \.php$>
     SetHandler "proxy:unix:$PHP_SOCK|fcgi://localhost/"
   </FilesMatch>
-
-  ErrorLog \${APACHE_LOG_DIR}/$domain-error.log
-  CustomLog \${APACHE_LOG_DIR}/$domain-access.log combined
 </VirtualHost>
 EOF
 
   a2ensite $domain.conf
   apachectl reload
-
-  echo "<?php echo 'Website $domain is working'; ?>" > "$SITE_ROOT/index.php"
+  echo "<?php echo 'Site $domain working'; ?>" > "$SITE_ROOT/index.php"
 
   clear
   echo "🌐 WEBSITE CREATED"
-  echo "Domain     : $domain"
-  echo "Public Dir : $SITE_ROOT"
+  echo "Domain       : $domain"
+  echo "Public Dir   : $SITE_ROOT"
   echo
-  echo "📂 FTP ACCESS"
-  echo "Host     : SERVER_IP / DOMAIN"
-  echo "Username : root"
-  echo "Password : root"
-  echo "Port     : 21"
+  echo "📂 FTP (SITE)"
+  echo "Host : $domain"
+  echo "User : $domain"
+  echo "Pass : root"
+  echo
+  echo "📂 FTP (ADMIN)"
+  echo "User : root"
+  echo "Pass : root"
   pause
 }
 
@@ -143,7 +152,6 @@ list_websites() {
   pause
 }
 
-# =====================================================
 delete_website() {
   read -p "Domain to delete: " domain
   a2dissite $domain.conf 2>/dev/null
@@ -155,20 +163,34 @@ delete_website() {
 }
 
 # =====================================================
-mysql_create() {
-  read -p "Database name: " db
-  read -p "DB username: " user
-  read -s -p "DB password: " pass
-  echo
+install_ssl() {
+  read -p "Domain for SSL: " domain
+  SSL_DIR="/etc/apache2/ssl/$domain"
+  mkdir -p $SSL_DIR
 
-  mysql <<EOF
-CREATE DATABASE $db;
-CREATE USER '$user'@'localhost' IDENTIFIED BY '$pass';
-GRANT ALL PRIVILEGES ON $db.* TO '$user'@'localhost';
-FLUSH PRIVILEGES;
+  openssl req -x509 -nodes -newkey rsa:2048 \
+    -keyout $SSL_DIR/key.pem \
+    -out $SSL_DIR/cert.pem \
+    -days 3650 \
+    -subj "/CN=$domain"
+
+  cat > /etc/apache2/sites-available/$domain-ssl.conf <<EOF
+<VirtualHost *:443>
+  ServerName $domain
+  DocumentRoot $WWW_ROOT/$domain/public_html
+  SSLEngine on
+  SSLCertificateFile $SSL_DIR/cert.pem
+  SSLCertificateKeyFile $SSL_DIR/key.pem
+
+  <FilesMatch \.php$>
+    SetHandler "proxy:unix:$PHP_SOCK|fcgi://localhost/"
+  </FilesMatch>
+</VirtualHost>
 EOF
 
-  echo "✅ Database & user created"
+  a2ensite $domain-ssl.conf
+  apachectl reload
+  echo "🔒 SSL installed for $domain"
   pause
 }
 
@@ -198,19 +220,14 @@ cloudflare_autostart() {
 # =====================================================
 advanced_status() {
   clear
-  echo "📊 PhoenixCP Advanced Status (Apache Mode)"
-  echo "-----------------------------------------"
-
-  pgrep apache2 >/dev/null && echo "Apache : RUNNING" || echo "Apache : STOPPED"
-  pgrep php-fpm >/dev/null && echo "PHP-FPM: RUNNING" || echo "PHP-FPM: STOPPED"
-  pgrep mysqld >/dev/null && echo "MySQL  : RUNNING" || echo "MySQL  : STOPPED"
-  pgrep -f pure-ftpd >/dev/null && echo "FTP    : RUNNING" || echo "FTP    : STOPPED"
-  pgrep -f cloudflared >/dev/null && echo "Cloudflare: RUNNING" || echo "Cloudflare: STOPPED"
-
-  echo
+  echo "📊 PhoenixCP Advanced Status"
+  pgrep apache2 >/dev/null && echo "Apache      : RUNNING" || echo "Apache      : STOPPED"
+  pgrep php-fpm >/dev/null && echo "PHP-FPM     : RUNNING" || echo "PHP-FPM     : STOPPED"
+  pgrep mysqld >/dev/null && echo "MySQL       : RUNNING" || echo "MySQL       : STOPPED"
+  pgrep -f pure-ftpd >/dev/null && echo "FTP         : RUNNING" || echo "FTP         : STOPPED"
+  pgrep -f cloudflared >/dev/null && echo "Cloudflare  : RUNNING" || echo "Cloudflare  : STOPPED"
   uptime
   free -h
-  df -h /
   pause
 }
 
@@ -218,7 +235,7 @@ advanced_status() {
 while true; do
   clear
   echo "==============================="
-  echo " PhoenixCP CLI v1.6"
+  echo " PhoenixCP CLI v1.8"
   echo "==============================="
   echo "1) Install Website Dependencies"
   echo "2) Create Website"
@@ -227,11 +244,12 @@ while true; do
   echo "5) Advanced Service Status"
   echo "6) 🚀 Start All Services"
   echo "7) 🛑 Stop All Services"
-  echo "8) Install Cloudflare Tunnel"
-  echo "9) Enable Cloudflare Tunnel Auto-Start"
-  echo "10) Create MySQL DB & User"
-  echo "11) 🔥 Clear System (NUKE MODE)"
-  echo "12) Exit"
+  echo "8) 🔒 Install SSL (Apache)"
+  echo "9) ☁ Install Cloudflare Tunnel"
+  echo "10) ☁ Enable Cloudflare Auto-Start"
+  echo "11) 🔁 Enable Auto-start (cron)"
+  echo "12) 🔥 Clear System (NUKE MODE)"
+  echo "13) Exit"
   echo "==============================="
   read -p "Choose option: " opt
 
@@ -243,11 +261,12 @@ while true; do
     5) advanced_status ;;
     6) start_all_services ;;
     7) stop_all_services ;;
-    8) install_cloudflare ;;
-    9) cloudflare_autostart ;;
-    10) mysql_create ;;
-    11) clear_system ;;
-    12) exit ;;
-    *) echo "Invalid option"; pause ;;
+    8) install_ssl ;;
+    9) install_cloudflare ;;
+    10) cloudflare_autostart ;;
+    11) auto_start_cron ;;
+    12) clear_system ;;
+    13) exit ;;
+    *) pause ;;
   esac
 done
