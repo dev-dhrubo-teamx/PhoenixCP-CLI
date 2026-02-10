@@ -1,66 +1,19 @@
 #!/bin/bash
 
-# =====================================================
-# PhoenixCP CLI v1.0
-# Rise • Control • Deploy
-# Author: @dev-dhrubo-teamx
-# =====================================================
-
-# -----------------------------
-# THEME (Glass + Neon)
-# -----------------------------
-DARK="\e[48;5;235m"
-ORANGE="\e[38;5;208m"
-CYAN="\e[38;5;45m"
-WHITE="\e[97m"
-DIM="\e[2m"
-RESET="\e[0m"
-CLEAR="\e[2J\e[H"
-
-# -----------------------------
+# =============================
 # CONFIG
-# -----------------------------
+# =============================
 WWW_ROOT="/var/www"
 NGX_DIR="/etc/nginx/sites-enabled"
 SSL_BASE="/etc/nginx/ssl"
 PHP_VER="8.1"
 PHP_SOCK="/run/php/php${PHP_VER}-fpm.sock"
 
-pause(){ echo; read -p "↩ Press Enter to continue..."; }
+pause(){ read -p "Press Enter to continue..."; }
 
-# -----------------------------
-# ANIMATED LOGO
-# -----------------------------
-phoenix_logo() {
-  clear
-  echo -e "$CLEAR"
-  logo=(
-"██████╗ ██╗  ██╗ ██████╗ ███████╗███╗   ██╗██╗██╗  ██╗"
-"██╔══██╗██║  ██║██╔═══██╗██╔════╝████╗  ██║██║╚██╗██╔╝"
-"██████╔╝███████║██║   ██║█████╗  ██╔██╗ ██║██║ ╚███╔╝ "
-"██╔═══╝ ██╔══██║██║   ██║██╔══╝  ██║╚██╗██║██║ ██╔██╗ "
-"██║     ██║  ██║╚██████╔╝███████╗██║ ╚████║██║██╔╝ ██╗"
-"╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝"
-  )
-
-  for l in "${logo[@]}"; do
-    echo -e "${ORANGE}$l${RESET}"
-    sleep 0.04
-  done
-
-  echo
-  echo -e "${CYAN}           P H O E N I X   C P   C L I${RESET}"
-  echo -e "${DIM}         Rise • Control • Deploy${RESET}"
-  echo -e "${DIM}                v1.0${RESET}"
-  echo
-  sleep 0.6
-}
-
-# -----------------------------
-# CORE FUNCTIONS
-# -----------------------------
+# =============================
 install_dependencies() {
-  echo -e "${ORANGE}📦 Installing Web Stack...${RESET}"
+  echo "📦 Installing web stack..."
   apt update
   apt install -y nginx mariadb-server openssl curl \
     php${PHP_VER}-fpm php${PHP_VER}-cli php${PHP_VER}-mysql \
@@ -92,13 +45,38 @@ EOF
 
   echo "<?php phpinfo(); ?>" > /var/www/html/index.php
   nginx -s reload
-
-  echo -e "${CYAN}✅ Web stack ready${RESET}"
+  echo "✅ Dependencies installed"
   pause
 }
 
+# =============================
+install_cloudflare() {
+  echo "☁ Installing Cloudflare Tunnel..."
+  mkdir -p /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg \
+    | tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
+
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] \
+https://pkg.cloudflare.com/cloudflared any main" \
+    | tee /etc/apt/sources.list.d/cloudflared.list
+
+  apt update && apt install -y cloudflared
+  echo "✅ cloudflared installed"
+  pause
+}
+
+# =============================
+cloudflare_autostart() {
+  read -p "Tunnel name: " TUN
+  (crontab -l 2>/dev/null; \
+   echo "@reboot cloudflared tunnel run $TUN >/var/log/cloudflared.log 2>&1 &") | crontab -
+  echo "✅ cloudflared auto-start enabled"
+  pause
+}
+
+# =============================
 create_site() {
-  read -p "🌐 Domain name: " domain
+  read -p "Domain name: " domain
   mkdir -p $WWW_ROOT/$domain/public_html
 
   cat > $NGX_DIR/$domain.conf <<EOF
@@ -119,31 +97,33 @@ server {
 }
 EOF
 
-  echo "<?php echo 'PhoenixCP CLI site: $domain'; ?>" > $WWW_ROOT/$domain/public_html/index.php
+  echo "<?php echo 'Site $domain working'; ?>" > $WWW_ROOT/$domain/public_html/index.php
   nginx -s reload
-
-  echo -e "${CYAN}🔥 Website created: $domain${RESET}"
+  echo "✅ Website created: $domain"
   pause
 }
 
+# =============================
 delete_site() {
-  read -p "🗑 Domain to delete: " domain
+  read -p "Domain to delete: " domain
   rm -rf $WWW_ROOT/$domain
   rm -f $NGX_DIR/$domain.conf
   nginx -s reload
-  echo -e "${ORANGE}✔ Deleted $domain${RESET}"
+  echo "🗑️ Website deleted: $domain"
   pause
 }
 
+# =============================
 list_sites() {
-  echo -e "${CYAN}📂 Active Websites${RESET}"
+  echo "📂 Websites:"
   ls $NGX_DIR | grep .conf | sed 's/.conf//'
   pause
 }
 
+# =============================
 mysql_create() {
-  read -p "DB name: " db
-  read -p "DB user: " user
+  read -p "Database name: " db
+  read -p "DB username: " user
   read -s -p "DB password: " pass
   echo
 
@@ -154,13 +134,16 @@ GRANT ALL PRIVILEGES ON $db.* TO '$user'@'localhost';
 FLUSH PRIVILEGES;
 EOF
 
-  echo -e "${CYAN}🛢 Database ready${RESET}"
+  echo "✅ Database & user created"
   pause
 }
 
+# =============================
 install_ssl() {
-  read -p "🔐 Domain for SSL: " domain
+  read -p "Domain for SSL: " domain
   SSL_DIR="$SSL_BASE/$domain"
+  CONF="$NGX_DIR/$domain.conf"
+
   mkdir -p $SSL_DIR
 
   openssl req -x509 -nodes -newkey rsa:2048 \
@@ -169,7 +152,7 @@ install_ssl() {
     -days 3650 \
     -subj "/CN=$domain"
 
-  cat > $NGX_DIR/$domain.conf <<EOF
+  cat > $CONF <<EOF
 server {
   listen 80;
   server_name $domain www.$domain;
@@ -198,67 +181,72 @@ server {
 EOF
 
   nginx -s reload
-  echo -e "${CYAN}🔒 SSL enabled for $domain${RESET}"
+  echo "🔒 SSL installed for $domain"
   pause
 }
 
+# =============================
 ssl_status() {
-  read -p "Domain: " domain
+  read -p "Domain name: " domain
   if [ -f "$SSL_BASE/$domain/origin.crt" ]; then
-    echo -e "${CYAN}✔ SSL ACTIVE${RESET}"
+    echo "🔐 SSL installed for $domain"
     openssl x509 -in $SSL_BASE/$domain/origin.crt -noout -dates
   else
-    echo -e "${ORANGE}✖ No SSL found${RESET}"
+    echo "❌ No SSL found for $domain"
   fi
   pause
 }
 
+# =============================
 advanced_status() {
   clear
-  echo -e "${CYAN}📊 System Status${RESET}"
-  echo "------------------------------"
-  pgrep nginx >/dev/null && echo "Nginx   : RUNNING" || echo "Nginx   : STOPPED"
-  pgrep php-fpm >/dev/null && echo "PHP     : RUNNING" || echo "PHP     : STOPPED"
-  pgrep mysqld >/dev/null && echo "MySQL   : RUNNING" || echo "MySQL   : STOPPED"
+  echo "📊 Service Status"
+  pgrep nginx >/dev/null && echo "Nginx  : RUNNING" || echo "Nginx  : STOPPED"
+  pgrep php-fpm >/dev/null && echo "PHP    : RUNNING" || echo "PHP    : STOPPED"
+  pgrep mysqld >/dev/null && echo "MySQL  : RUNNING" || echo "MySQL  : STOPPED"
   echo
-  echo "Websites: $(ls $NGX_DIR | grep .conf | wc -l)"
+  echo "Ports:"
+  ss -lnt | awk 'NR>1{print $4}' | sort -u
+  echo
+  echo "Websites:"
+  ls $NGX_DIR | grep .conf | wc -l
+  echo
   free -h
   pause
 }
 
-# -----------------------------
-# DASHBOARD
-# -----------------------------
-phoenix_logo
-
+# =============================
 while true; do
   clear
-  echo -e "${CYAN}╭──────────────────────────────────────╮${RESET}"
-  echo -e "${CYAN}│     🐦‍🔥 PhoenixCP CLI Dashboard     │${RESET}"
-  echo -e "${CYAN}╰──────────────────────────────────────╯${RESET}"
-  echo
-  echo -e "${ORANGE}1)${RESET} Install Website Dependencies"
-  echo -e "${ORANGE}2)${RESET} Create Website"
-  echo -e "${ORANGE}3)${RESET} List Websites"
-  echo -e "${ORANGE}4)${RESET} Delete Website"
-  echo -e "${ORANGE}5)${RESET} Install SSL (Cloudflare Origin)"
-  echo -e "${ORANGE}6)${RESET} SSL Status Check"
-  echo -e "${ORANGE}7)${RESET} Create MySQL DB & User"
-  echo -e "${ORANGE}8)${RESET} Advanced System Status"
-  echo -e "${ORANGE}9)${RESET} Exit"
-  echo
-  read -p "Choose option ➜ " opt
+  echo "==============================="
+  echo "        MiniPanel (CLI)"
+  echo "==============================="
+  echo "1) Install Website Dependencies"
+  echo "2) Create Website"
+  echo "3) List Websites"
+  echo "4) Delete Website"
+  echo "5) Advanced Service Status"
+  echo "6) Install Cloudflare Tunnel"
+  echo "7) Enable Cloudflare Tunnel Auto-Start"
+  echo "8) Install SSL for Website"
+  echo "9) SSL Status Check"
+  echo "10) Create MySQL DB & User"
+  echo "11) Exit"
+  echo "==============================="
+  read -p "Choose option: " opt
 
   case $opt in
     1) install_dependencies ;;
     2) create_site ;;
     3) list_sites ;;
     4) delete_site ;;
-    5) install_ssl ;;
-    6) ssl_status ;;
-    7) mysql_create ;;
-    8) advanced_status ;;
-    9) clear; exit ;;
+    5) advanced_status ;;
+    6) install_cloudflare ;;
+    7) cloudflare_autostart ;;
+    8) install_ssl ;;
+    9) ssl_status ;;
+    10) mysql_create ;;
+    11) exit ;;
     *) echo "Invalid option"; pause ;;
   esac
 done
