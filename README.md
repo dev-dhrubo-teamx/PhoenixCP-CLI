@@ -77,12 +77,12 @@ a2dissite 000-default.conf
 a2dissite default-ssl.conf
 apachectl -k graceful
 ```
-Tiny Default User 
+# Tiny Default User 
 
 username : admin
 pass : admin@123
 
-Phpmyadmin Default User :
+# Phpmyadmin Default User :
 
 user: root
 pass : root
