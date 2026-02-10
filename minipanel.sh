@@ -166,34 +166,46 @@ create_website() {
   ServerAlias www.$domain
   DocumentRoot $SITE_ROOT
 
+  DirectoryIndex index.php index.html
+
   <Directory $SITE_ROOT>
     AllowOverride All
     Require all granted
+    Options Indexes FollowSymLinks
   </Directory>
 
   <FilesMatch \.php$>
     SetHandler "proxy:unix:$PHP_SOCK|fcgi://localhost/"
   </FilesMatch>
+
+  ErrorLog \${APACHE_LOG_DIR}/$domain-error.log
+  CustomLog \${APACHE_LOG_DIR}/$domain-access.log combined
 </VirtualHost>
 EOF
 
   # Enable site
   a2ensite $domain.conf
 
-  # 🔒 CRITICAL FIX: disable default Apache site
+  # 🔒 HARD GUARD — disable Apache default sites (HTTP + HTTPS)
   a2dissite 000-default.conf 2>/dev/null || true
+  a2dissite default-ssl.conf 2>/dev/null || true
 
-  # Reload Apache
   apachectl reload
 
-  echo "<?php echo 'Site $domain working'; ?>" > "$SITE_ROOT/index.php"
+  # Default test file (optional, user can delete)
+  echo "<?php echo 'Directory listing enabled. Site $domain is working.'; ?>" > "$SITE_ROOT/index.php"
 
   clear
-  echo "🌐 WEBSITE CREATED"
+  echo "🌐 WEBSITE CREATED (Directory Listing ON)"
+  echo "----------------------------------------"
   echo "Domain       : $domain"
   echo "Public Dir   : $SITE_ROOT"
   echo
-  echo "📂 FTP (SITE)"
+  echo "📂 BEHAVIOR"
+  echo "- index.php found  → loads index.php"
+  echo "- index.php missing → shows directory listing"
+  echo
+  echo "📂 FTP (SITE USER)"
   echo "Host : $domain"
   echo "User : $domain"
   echo "Pass : root"
