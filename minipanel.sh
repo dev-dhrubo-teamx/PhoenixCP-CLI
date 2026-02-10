@@ -17,7 +17,9 @@ install_dependencies() {
   apt update
   apt install -y nginx mariadb-server openssl curl \
     php${PHP_VER}-fpm php${PHP_VER}-cli php${PHP_VER}-mysql \
-    php${PHP_VER}-curl php${PHP_VER}-mbstring php${PHP_VER}-xml
+    php${PHP_VER}-curl php${PHP_VER}-mbstring php${PHP_VER}-xml \
+    apt install -y phpmyadmin
+
 
   nginx || true
   php-fpm${PHP_VER} || true
