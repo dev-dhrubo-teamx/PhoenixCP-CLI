@@ -65,7 +65,7 @@ ttyd -p 7681 bash
 ```
 http://SERVER_IP:7681
 ```
-# Gdown ইনস্টল করার সবচেয়ে clean ও reliable উপায়
+# Gdown Install clean ও reliable Method
 ```
 apt update
 apt install -y python3-pip
