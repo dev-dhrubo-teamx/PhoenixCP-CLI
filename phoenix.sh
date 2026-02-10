@@ -30,10 +30,4 @@ echo "⬇ Downloading PhoenixCP CLI..."
 curl -fsSL $REPO_RAW/minipanel.sh -o /usr/local/bin/minipanel
 
 chmod +x /usr/local/bin/minipanel
-
-echo
-echo "✅ PhoenixCP CLI installed successfully!"
-echo "🚀 Launching panel..."
-sleep 1
-
 minipanel
