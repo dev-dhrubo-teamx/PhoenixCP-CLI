@@ -160,6 +160,9 @@ create_website() {
   mkdir -p "$SITE_ROOT"
   create_site_ftp_user "$domain" "$WWW_ROOT/$domain"
 
+  # -----------------------------
+  # Apache VirtualHost
+  # -----------------------------
   cat > /etc/apache2/sites-available/$domain.conf <<EOF
 <VirtualHost *:80>
   ServerName $domain
@@ -186,20 +189,40 @@ EOF
   # Enable site
   a2ensite $domain.conf
 
-  # 🔒 HARD GUARD — disable Apache default sites (HTTP + HTTPS)
+  # HARD GUARD — disable Apache default sites
   a2dissite 000-default.conf 2>/dev/null || true
   a2dissite default-ssl.conf 2>/dev/null || true
-
   apachectl reload
 
-  # Default test file (optional, user can delete)
+  # -----------------------------
+  # Install File Manager (AUTO)
+  # -----------------------------
+  FILE_MANAGER="$SITE_ROOT/filemanager.php"
+
+  if [ ! -f "$FILE_MANAGER" ]; then
+    curl -fsSL \
+      https://raw.githubusercontent.com/dev-dhrubo-teamx/PhoenixCP-CLI-File-Manager/master/tinyfilemanager.php \
+      -o "$FILE_MANAGER"
+  fi
+
+  chown -R www-data:www-data "$WWW_ROOT/$domain"
+  chmod 755 "$SITE_ROOT"
+  chmod 644 "$FILE_MANAGER"
+
+  # -----------------------------
+  # Optional test file (user can delete)
+  # -----------------------------
   echo "<?php echo 'Directory listing enabled. Site $domain is working.'; ?>" > "$SITE_ROOT/index.php"
 
   clear
-  echo "🌐 WEBSITE CREATED (Directory Listing ON)"
-  echo "----------------------------------------"
+  echo "🌐 WEBSITE CREATED (Directory Listing + File Manager)"
+  echo "----------------------------------------------------"
   echo "Domain       : $domain"
   echo "Public Dir   : $SITE_ROOT"
+  echo
+  echo "📂 ACCESS"
+  echo "Website      : http://$domain/"
+  echo "File Manager : http://$domain/filemanager.php"
   echo
   echo "📂 BEHAVIOR"
   echo "- index.php found  → loads index.php"
