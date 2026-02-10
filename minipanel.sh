@@ -177,8 +177,15 @@ create_website() {
 </VirtualHost>
 EOF
 
+  # Enable site
   a2ensite $domain.conf
+
+  # 🔒 CRITICAL FIX: disable default Apache site
+  a2dissite 000-default.conf 2>/dev/null || true
+
+  # Reload Apache
   apachectl reload
+
   echo "<?php echo 'Site $domain working'; ?>" > "$SITE_ROOT/index.php"
 
   clear
@@ -196,7 +203,6 @@ EOF
   echo "Pass : root"
   pause
 }
-
 # =====================================================
 list_websites() {
   echo "📂 Hosted Websites:"
