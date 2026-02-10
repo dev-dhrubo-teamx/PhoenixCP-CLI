@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # =====================================================
-# PhoenixCP CLI v1.5 – Apache Stable + Service Bootstrap
+# PhoenixCP CLI v1.6 – Apache Only FULL PANEL
 # Author: @dev-dhrubo-teamx
 # =====================================================
 
@@ -13,7 +13,7 @@ pause(){ read -p "Press Enter to continue..."; }
 
 # =====================================================
 start_all_services() {
-  echo "🚀 Starting all services (manual mode)"
+  echo "🚀 Starting all services"
 
   mkdir -p /run/php
 
@@ -27,8 +27,19 @@ start_all_services() {
 }
 
 # =====================================================
+stop_all_services() {
+  echo "🛑 Stopping all services"
+
+  pkill apache2 php-fpm mysqld pure-ftpd cloudflared 2>/dev/null
+
+  echo "✅ All services stopped"
+  pause
+}
+
+# =====================================================
 clear_system() {
   echo "🔥 FULL SYSTEM RESET (NUKE MODE)"
+  echo "This will REMOVE apache, php, mysql, phpMyAdmin, FTP, Cloudflare"
   read -p "Type YES to confirm: " c
   [ "$c" != "YES" ] && return
 
@@ -39,6 +50,8 @@ clear_system() {
   apt autoclean -y
 
   rm -rf /etc/apache2 /etc/php /etc/mysql /var/www /run/php /usr/share/phpmyadmin
+  rm -f /etc/apt/sources.list.d/cloudflared.list
+  rm -f /usr/share/keyrings/cloudflare-public-v2.gpg
 
   crontab -l 2>/dev/null | grep -v cloudflared | crontab -
 
@@ -48,7 +61,7 @@ clear_system() {
 
 # =====================================================
 install_dependencies() {
-  echo "📦 Installing Apache Web Stack (Stable Mode)"
+  echo "📦 Installing Apache Web Stack"
 
   apt update
   apt install -y \
@@ -160,6 +173,29 @@ EOF
 }
 
 # =====================================================
+install_cloudflare() {
+  mkdir -p /usr/share/keyrings
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg \
+    | tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
+
+  echo "deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] \
+https://pkg.cloudflare.com/cloudflared any main" \
+    | tee /etc/apt/sources.list.d/cloudflared.list
+
+  apt update && apt install -y cloudflared
+  echo "✅ Cloudflare Tunnel installed"
+  pause
+}
+
+cloudflare_autostart() {
+  read -p "Tunnel name: " TUN
+  (crontab -l 2>/dev/null; \
+   echo "@reboot cloudflared tunnel run $TUN >/var/log/cloudflared.log 2>&1 &") | crontab -
+  echo "✅ Cloudflare tunnel auto-start enabled"
+  pause
+}
+
+# =====================================================
 advanced_status() {
   clear
   echo "📊 PhoenixCP Advanced Status (Apache Mode)"
@@ -169,6 +205,7 @@ advanced_status() {
   pgrep php-fpm >/dev/null && echo "PHP-FPM: RUNNING" || echo "PHP-FPM: STOPPED"
   pgrep mysqld >/dev/null && echo "MySQL  : RUNNING" || echo "MySQL  : STOPPED"
   pgrep -f pure-ftpd >/dev/null && echo "FTP    : RUNNING" || echo "FTP    : STOPPED"
+  pgrep -f cloudflared >/dev/null && echo "Cloudflare: RUNNING" || echo "Cloudflare: STOPPED"
 
   echo
   uptime
@@ -181,7 +218,7 @@ advanced_status() {
 while true; do
   clear
   echo "==============================="
-  echo " PhoenixCP CLI v1.5"
+  echo " PhoenixCP CLI v1.6"
   echo "==============================="
   echo "1) Install Website Dependencies"
   echo "2) Create Website"
@@ -189,9 +226,12 @@ while true; do
   echo "4) Delete Website"
   echo "5) Advanced Service Status"
   echo "6) 🚀 Start All Services"
-  echo "7) Create MySQL DB & User"
-  echo "8) 🔥 Clear System (NUKE MODE)"
-  echo "9) Exit"
+  echo "7) 🛑 Stop All Services"
+  echo "8) Install Cloudflare Tunnel"
+  echo "9) Enable Cloudflare Tunnel Auto-Start"
+  echo "10) Create MySQL DB & User"
+  echo "11) 🔥 Clear System (NUKE MODE)"
+  echo "12) Exit"
   echo "==============================="
   read -p "Choose option: " opt
 
@@ -202,9 +242,12 @@ while true; do
     4) delete_website ;;
     5) advanced_status ;;
     6) start_all_services ;;
-    7) mysql_create ;;
-    8) clear_system ;;
-    9) exit ;;
+    7) stop_all_services ;;
+    8) install_cloudflare ;;
+    9) cloudflare_autostart ;;
+    10) mysql_create ;;
+    11) clear_system ;;
+    12) exit ;;
     *) echo "Invalid option"; pause ;;
   esac
 done
