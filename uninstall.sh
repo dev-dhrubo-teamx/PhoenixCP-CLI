@@ -10,8 +10,6 @@ set -e
 echo "🔥 PhoenixCP & Web Stack FULL REMOVAL"
 echo "⚠️ This will WIPE EVERYTHING (Apache, Nginx, PHP, MySQL, FTP, Cloudflare)"
 
-fi
-
 echo "🛑 Stopping running services..."
 
 # Kill processes (systemd or not)
