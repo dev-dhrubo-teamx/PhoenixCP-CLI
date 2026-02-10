@@ -1,19 +1,34 @@
 #!/bin/bash
 
 # =====================================================
-# PhoenixCP CLI v1.4 – Apache Only Stable Edition
+# PhoenixCP CLI v1.5 – Apache Stable + Service Bootstrap
 # Author: @dev-dhrubo-teamx
 # =====================================================
 
 WWW_ROOT="/var/www"
 PHP_VER="8.1"
+PHP_SOCK="/run/php/php${PHP_VER}-fpm.sock"
 
 pause(){ read -p "Press Enter to continue..."; }
 
 # =====================================================
+start_all_services() {
+  echo "🚀 Starting all services (manual mode)"
+
+  mkdir -p /run/php
+
+  apachectl start 2>/dev/null || true
+  php-fpm${PHP_VER} 2>/dev/null || true
+  pure-ftpd &>/dev/null &
+  mysqld_safe --bind-address=127.0.0.1 &>/dev/null &
+
+  echo "✅ All services started"
+  pause
+}
+
+# =====================================================
 clear_system() {
   echo "🔥 FULL SYSTEM RESET (NUKE MODE)"
-  echo "This will REMOVE apache, php, mysql, phpMyAdmin, FTP"
   read -p "Type YES to confirm: " c
   [ "$c" != "YES" ] && return
 
@@ -42,11 +57,9 @@ install_dependencies() {
     php${PHP_VER}-curl php${PHP_VER}-mbstring php${PHP_VER}-xml \
     phpmyadmin pure-ftpd
 
-  # Apache modules for PHP-FPM
   a2enmod proxy proxy_fcgi rewrite setenvif
   a2enconf php${PHP_VER}-fpm
 
-  # FTP config (simple)
   echo yes > /etc/pure-ftpd/conf/NoAnonymous
   echo no  > /etc/pure-ftpd/conf/PAMAuthentication
   echo yes > /etc/pure-ftpd/conf/UnixAuthentication
@@ -84,7 +97,7 @@ create_website() {
   </Directory>
 
   <FilesMatch \.php$>
-    SetHandler "proxy:unix:/run/php/php${PHP_VER}-fpm.sock|fcgi://localhost/"
+    SetHandler "proxy:unix:$PHP_SOCK|fcgi://localhost/"
   </FilesMatch>
 
   ErrorLog \${APACHE_LOG_DIR}/$domain-error.log
@@ -98,16 +111,15 @@ EOF
   echo "<?php echo 'Website $domain is working'; ?>" > "$SITE_ROOT/index.php"
 
   clear
-  echo "🌐 WEBSITE CREATED SUCCESSFULLY"
-  echo "--------------------------------"
-  echo "Domain       : $domain"
-  echo "Public Dir   : $SITE_ROOT"
+  echo "🌐 WEBSITE CREATED"
+  echo "Domain     : $domain"
+  echo "Public Dir : $SITE_ROOT"
   echo
-  echo "📂 FTP DETAILS"
-  echo "Host         : SERVER_IP / DOMAIN"
-  echo "Username     : root"
-  echo "Password     : root"
-  echo "Port         : 21"
+  echo "📂 FTP ACCESS"
+  echo "Host     : SERVER_IP / DOMAIN"
+  echo "Username : root"
+  echo "Password : root"
+  echo "Port     : 21"
   pause
 }
 
@@ -121,11 +133,9 @@ list_websites() {
 # =====================================================
 delete_website() {
   read -p "Domain to delete: " domain
-
   a2dissite $domain.conf 2>/dev/null
   rm -f /etc/apache2/sites-available/$domain.conf
   rm -rf "$WWW_ROOT/$domain"
-
   apachectl reload
   echo "🗑 Website deleted: $domain"
   pause
@@ -150,29 +160,6 @@ EOF
 }
 
 # =====================================================
-install_cloudflare() {
-  mkdir -p /usr/share/keyrings
-  curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg \
-    | tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null
-
-  echo "deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] \
-https://pkg.cloudflare.com/cloudflared any main" \
-    | tee /etc/apt/sources.list.d/cloudflared.list
-
-  apt update && apt install -y cloudflared
-  echo "✅ cloudflared installed"
-  pause
-}
-
-cloudflare_autostart() {
-  read -p "Tunnel name: " TUN
-  (crontab -l 2>/dev/null; \
-   echo "@reboot cloudflared tunnel run $TUN >/var/log/cloudflared.log 2>&1 &") | crontab -
-  echo "✅ Cloudflare tunnel auto-start enabled"
-  pause
-}
-
-# =====================================================
 advanced_status() {
   clear
   echo "📊 PhoenixCP Advanced Status (Apache Mode)"
@@ -181,7 +168,7 @@ advanced_status() {
   pgrep apache2 >/dev/null && echo "Apache : RUNNING" || echo "Apache : STOPPED"
   pgrep php-fpm >/dev/null && echo "PHP-FPM: RUNNING" || echo "PHP-FPM: STOPPED"
   pgrep mysqld >/dev/null && echo "MySQL  : RUNNING" || echo "MySQL  : STOPPED"
-  pgrep pure-ftpd >/dev/null && echo "FTP    : RUNNING" || echo "FTP    : STOPPED"
+  pgrep -f pure-ftpd >/dev/null && echo "FTP    : RUNNING" || echo "FTP    : STOPPED"
 
   echo
   uptime
@@ -194,18 +181,17 @@ advanced_status() {
 while true; do
   clear
   echo "==============================="
-  echo " PhoenixCP CLI v1.4"
+  echo " PhoenixCP CLI v1.5"
   echo "==============================="
   echo "1) Install Website Dependencies"
   echo "2) Create Website"
   echo "3) List Websites"
   echo "4) Delete Website"
   echo "5) Advanced Service Status"
-  echo "6) Install Cloudflare Tunnel"
-  echo "7) Enable Cloudflare Tunnel Auto-Start"
-  echo "8) Create MySQL DB & User"
-  echo "9) 🔥 Clear System (NUKE MODE)"
-  echo "10) Exit"
+  echo "6) 🚀 Start All Services"
+  echo "7) Create MySQL DB & User"
+  echo "8) 🔥 Clear System (NUKE MODE)"
+  echo "9) Exit"
   echo "==============================="
   read -p "Choose option: " opt
 
@@ -215,11 +201,10 @@ while true; do
     3) list_websites ;;
     4) delete_website ;;
     5) advanced_status ;;
-    6) install_cloudflare ;;
-    7) cloudflare_autostart ;;
-    8) mysql_create ;;
-    9) clear_system ;;
-    10) exit ;;
+    6) start_all_services ;;
+    7) mysql_create ;;
+    8) clear_system ;;
+    9) exit ;;
     *) echo "Invalid option"; pause ;;
   esac
 done
