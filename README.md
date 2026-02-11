@@ -121,9 +121,9 @@ php --ini
 ```
 2.
 ```
-sudo nano /etc/php/8.2/fpm/php.ini
+nano /etc/php/8.1/fpm/php.ini
 ```
 3.
 ```
-sudo systemctl restart php8.2-fpm
+sudo systemctl restart php8.1-fpm
 ```
