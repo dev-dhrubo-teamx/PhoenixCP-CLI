@@ -127,3 +127,16 @@ nano /etc/php/8.1/fpm/php.ini
 ```
 sudo systemctl restart php8.1-fpm
 ```
+# Sql Stric Mode Disable
+1.
+```
+mysql -u root -p
+```
+2.
+```
+SET GLOBAL sql_mode='';
+```
+3.
+```
+SELECT @@GLOBAL.sql_mode;
+```
