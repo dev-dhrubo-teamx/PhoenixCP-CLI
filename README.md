@@ -112,4 +112,18 @@ EOF
 ```
 apachectl -k graceful
 ```
+# Php Ini Update Mysql Upload Limit 
 
+1. 
+```
+php -v
+php --ini
+```
+2.
+```
+sudo nano /etc/php/8.2/fpm/php.ini
+```
+3.
+```
+sudo systemctl restart php8.2-fpm
+```
