@@ -140,3 +140,11 @@ SET GLOBAL sql_mode='';
 ```
 SELECT @@GLOBAL.sql_mode;
 ```
+# Backup & ZIP
+```
+apt install -y pigz
+apt install -y pv
+```
+```
+tar -cf - public_html | pv > public_html.tar
+```
