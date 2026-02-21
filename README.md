@@ -298,3 +298,88 @@ define('FORCE_SSL_ADMIN', true);
 <p>
 This prevents login and REST API issues when running behind Cloudflare Tunnel.
 </p>
+<h2>📦 Enable PHP Extensions: <code>intl</code> & <code>bcmath</code> (PHP 8.1)</h2>
+
+<p>
+This guide explains how to enable the required PHP extensions
+<strong>intl</strong> and <strong>bcmath</strong> for WordPress or PHP scripts
+running on <strong>Apache + PHP-FPM</strong>.
+</p>
+
+<hr>
+
+<h3>❓ Why these extensions are required</h3>
+<ul>
+  <li><strong>intl</strong> — locale, language, currency, and date handling</li>
+  <li><strong>bcmath</strong> — high-precision mathematical calculations</li>
+</ul>
+
+<p>You may see errors like:</p>
+
+<pre><code>
+You must enable the intl extension to use the script.
+You must enable the bcmath extension to use the script.
+</code></pre>
+
+<hr>
+
+<h3>✅ Step 1: Install required packages</h3>
+
+<pre><code>
+apt update
+apt install -y php8.1-intl php8.1-bcmath
+</code></pre>
+
+<p><em>Safe to run even if already installed.</em></p>
+
+<hr>
+
+<h3>✅ Step 2: Enable extensions for PHP-FPM</h3>
+
+<p>Check if enabled:</p>
+
+<pre><code>
+ls /etc/php/8.1/fpm/conf.d | grep -E "intl|bcmath"
+</code></pre>
+
+<p>If not found, enable manually:</p>
+
+<pre><code>
+ln -s /etc/php/8.1/mods-available/intl.ini /etc/php/8.1/fpm/conf.d/20-intl.ini
+ln -s /etc/php/8.1/mods-available/bcmath.ini /etc/php/8.1/fpm/conf.d/20-bcmath.ini
+</code></pre>
+
+<hr>
+
+<h3>🔄 Step 3: Restart services</h3>
+
+<pre><code>
+service php8.1-fpm restart
+service apache2 restart
+</code></pre>
+
+<hr>
+
+<h3>🧪 Step 4: Verify (Web)</h3>
+
+<pre><code>
+echo "&lt;?php phpinfo(); ?&gt;" &gt; /var/www/html/info.php
+</code></pre>
+
+<p>Open in browser:</p>
+<pre><code>https://your-domain/info.php</code></pre>
+
+<p>Search for <strong>intl</strong> and <strong>bcmath</strong>.</p>
+
+<hr>
+
+<h3>⚠ Important notes</h3>
+<ul>
+  <li>CLI PHP uses <code>/etc/php/8.1/cli</code></li>
+  <li>Web PHP (Apache + FPM) uses <code>/etc/php/8.1/fpm</code></li>
+  <li>CLI extensions do <strong>not</strong> affect the website</li>
+</ul>
+
+<hr>
+
+<p><strong>Maintained by:</strong> TeamX-Dev-Dhrubo</p>
